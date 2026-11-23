@@ -144,7 +144,8 @@ The mapping is positional, so the names above are shared with Xbox-style pads:
 - Worn DS4 sticks may drift; raise `[pointer] deadzone` to `0.10–0.15` if the
   pointer crawls with the stick at rest.
 
-`tests/ps_mock.py` exercises the DS3 and DualSense paths without hardware.
+`tests/ps_mock.py` exercises the DS3 and DualSense paths without hardware,
+including shared-key ownership and hybrid HAT + `BTN_DPAD_*` d-pads.
 
 DualShock 3 was not tested on physical hardware: only a mock device with digital
 triggers and `BTN_DPAD_*` was used.

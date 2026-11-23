@@ -749,6 +749,7 @@ public:
     bool paused() const { return paused_; }
 
     void release_all_public() { release_all(); }
+    void reset_input_state_public() { reset_input_state(); }
     void end_scroll_public() {
         if (touchpad_mode()) tp_end();
     }
@@ -1000,6 +1001,20 @@ private:
     }
 
     void press(int code, int value) {
+        // Several buttons or overlapping combos may target the same key: emit
+        // only real transitions, so releasing one source keeps the key held.
+        auto it = key_refs_.find(code);
+        if (value) {
+            if (it != key_refs_.end()) {
+                ++it->second;
+                return;
+            }
+            key_refs_[code] = 1;
+        } else {
+            if (it == key_refs_.end()) return;
+            if (--it->second > 0) return;
+            key_refs_.erase(it);
+        }
         libevdev_uinput_write_event(ui_, EV_KEY, code, value);
         libevdev_uinput_write_event(ui_, EV_SYN, SYN_REPORT, 0);
     }
@@ -1047,6 +1062,22 @@ private:
         std::vector<std::string> copy(sent_.begin(), sent_.end());
         for (const auto& n : copy) release_sent(n);
         held_.clear();
+    }
+
+    // Drop analog state after a disconnect: evdev does not replay the current
+    // stick position, so stale values would keep moving the pointer/scroll.
+    void reset_input_state() {
+        left_[0] = left_[1] = 0.0;
+        right_[0] = right_[1] = 0.0;
+        trigger_[0] = trigger_[1] = 0.0;
+        trigger_btn_[0] = trigger_btn_[1] = false;
+        active_ = false;
+        scroll_moving_ = false;
+        acc_x_ = acc_y_ = 0.0;
+        acc_hi_v_ = acc_hi_h_ = 0.0;
+        acc_v_ = acc_h_ = 0.0;
+        combo_timer_ = 0.0;
+        combo_active_ = false;
     }
 
     void say(const char* msg) {
@@ -1154,12 +1185,12 @@ private:
                 return;
             }
 
-            // Prefer ABS_HAT0X/Y when present; BTN_DPAD_* is only a fallback.
-            if (ev.code == BTN_DPAD_UP || ev.code == BTN_DPAD_DOWN ||
-                ev.code == BTN_DPAD_LEFT || ev.code == BTN_DPAD_RIGHT) {
-                if (libevdev_has_event_code(pad_, EV_ABS, ABS_HAT0X) ||
-                    libevdev_has_event_code(pad_, EV_ABS, ABS_HAT0Y))
-                    return;
+            // Prefer the matching ABS_HAT0X/Y axis when the pad has it;
+            // BTN_DPAD_* is only a fallback for the other axis.
+            if (ev.code == BTN_DPAD_UP || ev.code == BTN_DPAD_DOWN) {
+                if (libevdev_has_event_code(pad_, EV_ABS, ABS_HAT0Y)) return;
+            } else if (ev.code == BTN_DPAD_LEFT || ev.code == BTN_DPAD_RIGHT) {
+                if (libevdev_has_event_code(pad_, EV_ABS, ABS_HAT0X)) return;
             }
 
             const auto& names = pad_code_names();
@@ -1330,6 +1361,7 @@ private:
     std::set<std::string> combo_;
     std::set<std::string> held_;
     std::set<std::string> sent_;
+    std::unordered_map<int, unsigned> key_refs_;
 
     double left_[2]{0.0, 0.0};
     double right_[2]{0.0, 0.0};
@@ -1502,6 +1534,22 @@ static int selftest(const Config& cfg) {
 
         std::this_thread::sleep_for(std::chrono::milliseconds(4));
     }
+
+    // A reconnect must not continue with stale sticks: after reset a tick has
+    // to stay silent even though the sticks were deflected just before.
+    gm.reset_input_state_public();
+    const int rel_x_before = seen[REL_X];
+    const int rel_y_before = seen[REL_Y];
+    for (int i = 0; i < 25; ++i) {
+        gm.tick_for_selftest(0.004);
+        input_event ev{};
+        while (libevdev_next_event(mouse, LIBEVDEV_READ_FLAG_NORMAL, &ev) ==
+               LIBEVDEV_READ_STATUS_SUCCESS)
+            seen[ev.code] += ev.value;
+        std::this_thread::sleep_for(std::chrono::milliseconds(4));
+    }
+    const bool reset_ok = seen[REL_X] == rel_x_before && seen[REL_Y] == rel_y_before;
+
     if (touch) {
         libevdev_grab(touch, LIBEVDEV_UNGRAB);
         libevdev_free(touch);
@@ -1528,8 +1576,9 @@ static int selftest(const Config& cfg) {
         std::printf("  %s: %d\n", name_of(code).c_str(), total);
     if (tpad) std::printf("движение пальцев: %s\n", mt_moved ? "есть" : "нет");
     std::printf("математика стика: %s\n", math_ok ? "OK" : "ПРОБЛЕМА");
+    std::printf("сброс состояния: %s\n", reset_ok ? "OK" : "ПРОБЛЕМА");
 
-    bool ok = math_ok && std::abs(seen[REL_X]) > 0 &&
+    bool ok = math_ok && reset_ok && std::abs(seen[REL_X]) > 0 &&
               (tpad ? mt_moved : std::abs(seen[REL_WHEEL]) > 0);
     std::printf("ИТОГ: %s\n", ok ? "OK" : "ПРОБЛЕМА");
     return ok ? 0 : 1;
@@ -1568,6 +1617,7 @@ static int run_daemon(Config cfg, bool verbose, const std::string& device_overri
         gm.loop();
         gm.end_scroll_public();
         gm.release_all_public();
+        gm.reset_input_state_public();
         gm.ungrab();
         gm.close_pad();
 

@@ -59,6 +59,8 @@ DPAD_UP = "KEY_F6"
 DPAD_DOWN = "KEY_F5"
 DPAD_LEFT = "KEY_F4"
 DPAD_RIGHT = "KEY_F3"
+LB = "KEY_F2"
+RB = "KEY_F2"
 """
 
 
@@ -66,7 +68,8 @@ def abs_info(lo: int, hi: int) -> AbsInfo:
     return AbsInfo(0, lo, hi, 0, 0, 0)
 
 
-def make_mock(name: str, *, analog_triggers: bool, hat: bool, dpad_buttons: bool) -> UInput:
+def make_mock(name: str, *, analog_triggers: bool, hat_x: bool, hat_y: bool,
+              dpad_buttons: list[int]) -> UInput:
     keys = [
         ecodes.BTN_SOUTH, ecodes.BTN_EAST, ecodes.BTN_NORTH, ecodes.BTN_WEST,
         ecodes.BTN_TL, ecodes.BTN_TR, ecodes.BTN_SELECT, ecodes.BTN_START,
@@ -85,16 +88,11 @@ def make_mock(name: str, *, analog_triggers: bool, hat: bool, dpad_buttons: bool
         ]
     else:
         keys += [ecodes.BTN_TL2, ecodes.BTN_TR2]
-    if hat:
-        axes += [
-            (ecodes.ABS_HAT0X, abs_info(-1, 1)),
-            (ecodes.ABS_HAT0Y, abs_info(-1, 1)),
-        ]
-    if dpad_buttons:
-        keys += [
-            ecodes.BTN_DPAD_UP, ecodes.BTN_DPAD_DOWN,
-            ecodes.BTN_DPAD_LEFT, ecodes.BTN_DPAD_RIGHT,
-        ]
+    if hat_x:
+        axes.append((ecodes.ABS_HAT0X, abs_info(-1, 1)))
+    if hat_y:
+        axes.append((ecodes.ABS_HAT0Y, abs_info(-1, 1)))
+    keys += dpad_buttons
 
     dev = UInput(
         {ecodes.EV_KEY: keys, ecodes.EV_ABS: axes},
@@ -160,6 +158,20 @@ def expect_key(dev: InputDevice, code: int, value: int, timeout: float = 1.0) ->
                 return True
 
 
+def expect_no_key(dev: InputDevice, code: int, timeout: float = 0.2) -> bool:
+    deadline = time.monotonic() + timeout
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return True
+        ready, _, _ = select.select([dev.fd], [], [], left)
+        if not ready:
+            return True
+        for ev in dev.read():
+            if ev.type == ecodes.EV_KEY and ev.code == code:
+                return False
+
+
 def check(cond: bool, message: str) -> None:
     if not cond:
         raise AssertionError(message)
@@ -176,11 +188,11 @@ def tap(ui: UInput, dev: InputDevice, in_type: int, in_code: int,
     check(expect_key(dev, out_code, 0), f"{message}: release")
 
 
-def run_case(name: str, config_path: str, *, analog_triggers: bool, hat: bool,
-             dpad_buttons: bool) -> None:
+def run_case(name: str, config_path: str, *, analog_triggers: bool, hat_x: bool,
+             hat_y: bool, dpad_buttons: list[int]) -> None:
     print(f"--- {name}")
-    ui = make_mock(name, analog_triggers=analog_triggers, hat=hat,
-                   dpad_buttons=dpad_buttons)
+    ui = make_mock(name, analog_triggers=analog_triggers, hat_x=hat_x,
+                   hat_y=hat_y, dpad_buttons=dpad_buttons)
     log = tempfile.NamedTemporaryFile(prefix="gm-ps-", suffix=".log", delete=False)
     log_path = log.name
     log.close()
@@ -216,24 +228,40 @@ def run_case(name: str, config_path: str, *, analog_triggers: bool, hat: bool,
             tap(ui, out, ecodes.EV_KEY, ecodes.BTN_TR2, ecodes.KEY_F7,
                 "R2 (BTN_TR2)")
 
-        if hat:
+        if hat_y:
             tap(ui, out, ecodes.EV_ABS, ecodes.ABS_HAT0Y, ecodes.KEY_F6,
                 "d-pad up (HAT)", press_value=-1)
             tap(ui, out, ecodes.EV_ABS, ecodes.ABS_HAT0Y, ecodes.KEY_F5,
                 "d-pad down (HAT)", press_value=1)
+        if hat_x:
             tap(ui, out, ecodes.EV_ABS, ecodes.ABS_HAT0X, ecodes.KEY_F4,
                 "d-pad left (HAT)", press_value=-1)
             tap(ui, out, ecodes.EV_ABS, ecodes.ABS_HAT0X, ecodes.KEY_F3,
                 "d-pad right (HAT)", press_value=1)
-        else:
+        if ecodes.BTN_DPAD_UP in dpad_buttons:
             tap(ui, out, ecodes.EV_KEY, ecodes.BTN_DPAD_UP, ecodes.KEY_F6,
                 "d-pad up (BTN_DPAD)")
             tap(ui, out, ecodes.EV_KEY, ecodes.BTN_DPAD_DOWN, ecodes.KEY_F5,
                 "d-pad down (BTN_DPAD)")
+        if ecodes.BTN_DPAD_LEFT in dpad_buttons:
             tap(ui, out, ecodes.EV_KEY, ecodes.BTN_DPAD_LEFT, ecodes.KEY_F4,
                 "d-pad left (BTN_DPAD)")
             tap(ui, out, ecodes.EV_KEY, ecodes.BTN_DPAD_RIGHT, ecodes.KEY_F3,
                 "d-pad right (BTN_DPAD)")
+
+        # LB and RB both map to KEY_F2: releasing one must not release the key.
+        ui.write(ecodes.EV_KEY, ecodes.BTN_TL, 1)
+        ui.syn()
+        check(expect_key(out, ecodes.KEY_F2, 1), "LB press -> KEY_F2")
+        ui.write(ecodes.EV_KEY, ecodes.BTN_TR, 1)
+        ui.syn()
+        check(expect_no_key(out, ecodes.KEY_F2), "RB press does not resend KEY_F2")
+        ui.write(ecodes.EV_KEY, ecodes.BTN_TL, 0)
+        ui.syn()
+        check(expect_no_key(out, ecodes.KEY_F2), "LB release keeps KEY_F2 held")
+        ui.write(ecodes.EV_KEY, ecodes.BTN_TR, 0)
+        ui.syn()
+        check(expect_key(out, ecodes.KEY_F2, 0), "RB release sends KEY_F2 up")
     finally:
         if out is not None:
             try:
@@ -266,9 +294,17 @@ def main() -> int:
         config_path = f.name
     try:
         run_case("Mock DualShock 3 Controller", config_path,
-                 analog_triggers=False, hat=True, dpad_buttons=False)
+                 analog_triggers=False, hat_x=True, hat_y=True, dpad_buttons=[])
         run_case("Mock DualSense Controller", config_path,
-                 analog_triggers=True, hat=False, dpad_buttons=True)
+                 analog_triggers=True, hat_x=False, hat_y=False,
+                 dpad_buttons=[ecodes.BTN_DPAD_UP, ecodes.BTN_DPAD_DOWN,
+                               ecodes.BTN_DPAD_LEFT, ecodes.BTN_DPAD_RIGHT])
+        run_case("Mock hybrid d-pad (HAT X + digital up/down)", config_path,
+                 analog_triggers=True, hat_x=True, hat_y=False,
+                 dpad_buttons=[ecodes.BTN_DPAD_UP, ecodes.BTN_DPAD_DOWN])
+        run_case("Mock hybrid d-pad (HAT Y + digital left/right)", config_path,
+                 analog_triggers=True, hat_x=False, hat_y=True,
+                 dpad_buttons=[ecodes.BTN_DPAD_LEFT, ecodes.BTN_DPAD_RIGHT])
     finally:
         os.unlink(config_path)
     print("PlayStation mapping: OK")
