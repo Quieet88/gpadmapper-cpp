@@ -1,9 +1,10 @@
 # gpadmapper-cpp
 
-Remap a gamepad to pointer, scroll and keyboard actions on Linux. The right
-stick moves the pointer, the left stick scrolls in all four directions, and
-buttons can be mapped to mouse buttons or key combinations. One small C++ daemon
-built on evdev + uinput: ~4 MB RSS and 0% CPU when idle.
+**gpadmapper-cpp** is a lightweight Linux gamepad-to-mouse and keyboard mapper.
+The right stick moves the pointer, the left stick scrolls smoothly in all four
+directions (touchpad-style on Wayland, wheel on X11), and any button can be
+mapped to a mouse button, a key, or a key combination. One small C++20 daemon
+built on evdev/uinput: ~4 MB RSS and 0% CPU when idle.
 
 Developed with an **8BitDo Ultimate 2C** on **Wayland (Wayfire/wlroots)**, but
 it works with any gamepad exposed through evdev, including Xbox-style pads and
