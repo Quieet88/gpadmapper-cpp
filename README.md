@@ -50,6 +50,21 @@ PlayStation controllers (DualShock 3/4, DualSense). It also runs on X11.
 
 ## Build and install
 
+### One command
+
+Requires a C++20 compiler, `make`, `pkg-config`, and the libevdev headers (see
+[Requirements](#requirements)). This downloads the source, builds it, installs
+to `~/.local/bin`, and starts the systemd user service:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Quieet88/gpadmapper-cpp/main/install.sh | sh
+```
+
+Set `PREFIX=/usr/local` to install elsewhere. Without systemd the service step
+is skipped.
+
+### From source
+
 ```sh
 make
 make install            # installs to ~/.local/bin (PREFIX=... to change)
@@ -269,6 +284,7 @@ at most ~4 ms of latency. If you can see stepping in pointer motion, change
 
 ```
 gpadmapper-cpp.cpp        daemon source
+install.sh               one-command install script
 config.example.toml      commented example config
 Makefile                 build / install / test
 systemd/                 user service unit

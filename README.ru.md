@@ -47,6 +47,21 @@ PlayStation-контроллеры (DualShock 3/4, DualSense). Работает 
 
 ## Сборка и установка
 
+### Одна команда
+
+Нужны компилятор C++20, `make`, `pkg-config` и заголовки libevdev (см.
+«Зависимости»). Команда скачивает исходники, собирает, ставит бинарник в
+`~/.local/bin` и запускает systemd-сервис:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Quieet88/gpadmapper-cpp/main/install.sh | sh
+```
+
+`PREFIX=/usr/local` — поставить в другое место. Без systemd шаг с сервисом
+пропускается.
+
+### Из исходников
+
 ```sh
 make
 make install            # ~/.local/bin (PREFIX=... чтобы изменить)
@@ -266,6 +281,7 @@ gpadmapper-cpp [-v] [--selftest] [--config PATH] [--device PATH]
 
 ```
 gpadmapper-cpp.cpp        исходник демона
+install.sh               установка одной командой
 config.example.toml      пример конфига с комментариями
 Makefile                 сборка / установка / тесты
 systemd/                 unit пользовательского сервиса
