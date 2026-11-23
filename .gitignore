@@ -1,0 +1,8 @@
+# Build output
+/gpadmapper-cpp
+*.o
+*.log
+
+# Python
+__pycache__/
+*.pyc

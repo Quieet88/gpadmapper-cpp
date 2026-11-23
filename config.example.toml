@@ -1,0 +1,68 @@
+# gpadmapper-cpp configuration.
+# Copy to ~/.config/gpadmapper-cpp/config.toml and restart the service:
+#   systemctl --user restart gpadmapper-cpp
+#
+# Format: TOML subset (sections, key = value, quoted strings, numbers,
+# booleans, # comments). Unknown keys are ignored.
+
+[device]
+# Substring of the device name; empty = auto-detect any gamepad.
+name = ""
+# true = grab the device exclusively (games will no longer see the gamepad).
+grab = false
+
+[pointer]         # right stick = pointer
+deadzone = 0.06   # 0..1
+curve    = 2.2    # 1 = linear, higher = finer control near the center
+max_speed = 1600  # maximum speed, pixels per second
+invert_x = false
+invert_y = false
+
+[scroll]          # left stick = scroll
+deadzone = 0.10
+curve    = 2.0
+max_speed = 12.0  # wheel notches per second at full deflection
+invert_x = false
+invert_y = true   # stick up = scroll up
+hi_res   = true   # smooth wheel scrolling (wheel mode)
+mode     = "touchpad"  # touchpad = smooth gesture scroll; wheel = REL_WHEEL
+
+[triggers]
+threshold = 0.25  # how far RT/LT must travel to count as pressed
+
+[toggle]
+# Pause/resume: hold the combo for `hold` seconds.
+# While paused the daemon emits nothing, so the gamepad is free for games.
+enabled = true
+combo   = "THUMBL+THUMBR"   # both stick clicks (no other bindings)
+hold    = 1.0
+notify  = true    # desktop notification on toggle
+
+# Button = action. Action: BTN_LEFT / BTN_RIGHT / BTN_MIDDLE /
+# BTN_SIDE / BTN_EXTRA / any KEY_* / none.
+# Combine keys with "+": "KEY_LEFTALT+KEY_TAB".
+# Pad buttons: BTN_A BTN_B BTN_X BTN_Y, LB RB LT RT,
+# SELECT START MODE THUMBL THUMBR, DPAD_UP DPAD_DOWN DPAD_LEFT DPAD_RIGHT
+# PlayStation: BTN_A = Cross, BTN_B = Circle, BTN_X = Square, BTN_Y = Triangle.
+# DS3 L2/R2 are digital buttons (BTN_TL2/BTN_TR2) and work as LT/RT too.
+[buttons]
+RT = "BTN_LEFT"
+RB = "BTN_RIGHT"
+
+MODE      = "KEY_LEFTMETA"  # 8BitDo "home" button -> Super
+START     = "KEY_TAB"
+SELECT    = "KEY_SPACE"
+DPAD_UP    = "KEY_UP"
+DPAD_DOWN  = "KEY_DOWN"
+DPAD_LEFT  = "KEY_LEFT"
+DPAD_RIGHT = "KEY_RIGHT"
+
+BTN_A = "KEY_ENTER"
+BTN_B = "KEY_ESC"
+BTN_X = "KEY_LEFTALT+KEY_TAB"
+
+# Examples:
+# LT     = "BTN_MIDDLE"     # middle mouse button
+# THUMBR = "KEY_ENTER"
+# THUMBL = "KEY_ESC"
+# BTN_A  = "KEY_SPACE"

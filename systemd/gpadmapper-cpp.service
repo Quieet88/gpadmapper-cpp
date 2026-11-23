@@ -1,0 +1,12 @@
+[Unit]
+Description=Gamepad to pointer and keyboard bridge (right stick = cursor, left stick = scroll)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/gpadmapper-cpp
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
